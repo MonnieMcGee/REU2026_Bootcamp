@@ -19,20 +19,21 @@ library(tidyverse)
 library(tidytext)
 library(reshape2)
 
-documents <- read.csv("AbstractExample.csv")
+documents <- read.csv("folktales.csv")
 
 # documents: data frame with columns id and text
 tokens <- documents %>%
-  unnest_tokens(word, text) %>%
-  anti_join(stop_words, by = "word")
+  unnest_tokens(word, Story) %>%
+  anti_join(stop_words, by = "word") # takes out stop words
 
 word_counts <- tokens %>%
-  count(id, word, sort = TRUE)
+  count(X, word, sort = TRUE)
 
 dtm <- word_counts %>%
-  cast_dtm(document = id,
+  cast_dtm(document = X,
            term = word,
            value = n)
+
 ```
 
 ## Fit LDA in R
@@ -41,7 +42,7 @@ dtm <- word_counts %>%
 library(topicmodels)
 
 # Fit a topic model with 5 topics
-lda_fit <- LDA(dtm, k = 5, control = list(seed = 1234))
+lda_fit <- LDA(dtm, k = 10, control = list(seed = 1234))
 
 # Display the 10 most probable words for each topic
 terms(lda_fit, 10)
@@ -70,6 +71,8 @@ top_terms <- beta  %>%
 top_terms
 
 # a word can appear multiple times in different topics
+
+# chart shows us how strongly a word is associated with a topic
 ```
 
 What would you name the topics?
@@ -101,7 +104,7 @@ terms(lda5, 10)
 # Perplexity - ideal situation is that topics are mutually exclusive, collectively exhaustive
 # balance the cohesion of topics and disjoint topics
 # used to help us find the value of k to use
-k_values <- 2:5
+k_values <- 5:10
 
 perplexities <- sapply(k_values, function(k) {
   fit <- LDA(
@@ -131,7 +134,7 @@ LDA ignores meta data on the text (covariates). Structural Topic Modeling is an 
 library(readr)
 library(stm)
 
-abstracts <- read_csv("AbstractExample.csv")
+abstracts <- read_csv("folktales.csv")
 
 # Add document metadata (I made this up)
 abstracts$field <- c(
