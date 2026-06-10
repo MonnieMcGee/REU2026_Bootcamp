@@ -104,7 +104,7 @@ terms(lda5, 10)
 # Perplexity - ideal situation is that topics are mutually exclusive, collectively exhaustive
 # balance the cohesion of topics and disjoint topics
 # used to help us find the value of k to use
-k_values <- 5:10
+k_values <- 5:20
 
 perplexities <- sapply(k_values, function(k) {
   fit <- LDA(

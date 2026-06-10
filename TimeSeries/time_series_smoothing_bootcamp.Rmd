@@ -54,6 +54,7 @@ n <- 200
 y <- numeric(n)
 
 for(t in 2:n){
+  # 0.8 is just a random choice, nothing specific, can change to number between -1 to 1 
   y[t] <- 0.8 * y[t-1] + rnorm(1)
 }
 
@@ -63,6 +64,8 @@ plot(time, y, type = "l",
 
 fit_lm <- lm(y ~ time)
 summary(fit_lm)
+
+# jaggedness is noise, but each point is quite strongly related to the only before it
 ```
 
 The true process has no linear trend. It has long runs above and below zero.
@@ -138,7 +141,7 @@ plot(climate_df$year, climate_df$co2_ppm,
      type = "l", col = "#D95F02", lwd = 2,
      xlab = "Year", ylab = expression(CO[2]~(ppm)),
      main = expression("Atmospheric "~CO[2]*", Mauna Loa\n(NOAA GML, annual mean)"))
-#dev.off()
+#dev.off() # everything between the first line and these can be used to make a pdf
 par(mfrow = c(1, 1))
 ```
 
@@ -174,7 +177,7 @@ par(mfrow = c(1, 1))
 **What to notice:**
 
 * The residual plot is not random noise — it has a clear wave-like structure indicating that consecutive residuals are related (positive autocorrelation).
-* The ACF confirms this: several lags are well outside the confidence bands.
+* The ACF (Autocorrelation Function) confirms this: several lags are well outside the confidence bands.
 * This violates the OLS independence assumption, so standard errors and p-values are unreliable — even though the regression *appears* to fit well.
 
 ### Why this matters 
@@ -183,9 +186,28 @@ par(mfrow = c(1, 1))
 # A formal test for first-order autocorrelation in residuals
 library(lmtest)
 dwtest(fit_climate)
+# null is that the true autocorrelation is 0
 ```
 
 The Durbin-Watson statistic near 0 (versus the null of 2) confirms strong positive autocorrelation. Key takeaway: a high $R^2$ and a significant coefficient are not sufficient. You must inspect the residuals over time.
+
+### Uncorrelated Random Walks
+```{r RandomWalk}
+n = 200
+x = cumsum(rnorm(n))
+y = cumsum(rnorm(n))
+time = 1:n
+
+plot(time, x, type = 'l', ylim = range(c(x, y)), xlab = 'Time', ylab = 'Value')
+lines(time, y, lty = 2)
+legend('topleft', legend = c('x', 'y'), lty = c(1, 2), bty = 'n')
+
+fit_rw <- lm(y ~ x)
+summary(fit_rw)
+acf(residuals(fit_rw))
+
+# spurious correlations - they aren't correlated but look correlated because they are both related to time                     
+```
 
 ## Features of Time Series
 
@@ -321,9 +343,29 @@ test <- recent_beer |>
 train |>
   autoplot(Beer) +
   autolayer(test, Beer, color = "gray") +
-  labs(title = "Hide the future first")
+  labs(title = "Future in Light Gray")
+```
+```{r benchmarks}
+fit_benchmarks <- train |>
+  model(
+    Mean = MEAN(Beer), # these are fpp methods
+    Naive = NAIVE(Beer),
+    Season_naive = SNAIVE(Beer)
+  )
+
+fc_benchmarks <- fit_benchmarks |>
+  forecast(h = nrow(test))
+
+fc_benchmarks |>
+  autoplot(train, level = NULL) +
+  autolayer(test, Beer) +
+  labs(title = 'Benchmark Forecasts')
 ```
 
+```{r numericalMeasures}
+accuracy(fc_benchmarks, test)
+```
+```
 ## Exponential Smoothing
 
 ### Motivating the idea: should old data count as much as newer data?
@@ -361,6 +403,7 @@ The smoothing parameter $\alpha \in (0, 1)$ controls the tradeoff:
 ### Manual demonstration of $\alpha$
 
 We write the recursive update by hand so we can compare three smoothers side-by-side.
+```
 
 ```{r ses-function}
 ses_level <- function(y, alpha) {
@@ -581,8 +624,14 @@ boot_means <- replicate(2000, {
   mean(x_star)
 })
 
+# all 3 techniques of confidence interval are non-parametric
+
 # 95% bootstrap confidence interval
 quantile(boot_means, c(0.025, 0.975))
+
+hist(airquality$Ozone)
+# sampling distribution of the sample mean will follow a normal distribution - CLT
+hist(boot_means) 
 ```
 
 Compare this to the classical t-interval:
@@ -674,6 +723,7 @@ ggplot(mtcars, aes(x = wt, y = mpg)) +
 ### Effect of the span (bandwidth)
 
 ```{r loess-spans}
+# percentage of data to use around current point
 spans <- c(0.2, 0.5, 0.75)
 
 span_df <- purrr::map_dfr(spans, function(s) {
@@ -744,7 +794,7 @@ x_vals  <- seq(min(mtcars$mpg) - 5, max(mtcars$mpg) + 5, length.out = 512)
 bws     <- c(1, 2.5, 6)
 
 kde_df <- purrr::map_dfr(bws, function(bw) {
-  d <- density(mtcars$mpg, bw = bw, n = 512)
+  d <- density(mtcars$mpg, bw = bw, n = 512) # bandwidth
   tibble(x = d$x, y = d$y, bandwidth = paste0("bw = ", bw))
 })
 
@@ -806,6 +856,7 @@ autoplot(cafe, Turnover) +
 **Question 1 — What patterns do you see?**
 
 ```{r activity-decompose}
+#time-series decomposition
 cafe |>
   model(STL(Turnover ~ season(window = "periodic"))) |>
   components() |>
